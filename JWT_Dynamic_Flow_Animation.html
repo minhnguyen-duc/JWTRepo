@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JWT Refresh Token Flow</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .header {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+        }
+
+        .btn-info {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .canvas-container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 1400px;
+            min-height: 700px;
+            position: relative;
+        }
+
+        .actor-container {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 50px;
+            position: relative;
+        }
+
+        .actor {
+            text-align: center;
+            position: relative;
+            z-index: 10;
+        }
+
+        .actor-icon {
+            width: 120px;
+            height: 120px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3em;
+            margin-bottom: 15px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .actor-icon.pulse {
+            animation: pulse 0.8s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .client-icon {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .server-icon {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .database-icon {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .actor-label {
+            font-weight: bold;
+            font-size: 1.2em;
+            color: #2d3436;
+        }
+
+        .actor-status {
+            margin-top: 10px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            display: inline-block;
+            min-width: 150px;
+        }
+
+        .status-idle {
+            background: #e5e7eb;
+            color: #6b7280;
+        }
+
+        .status-active {
+            background: #dcfce7;
+            color: #166534;
+            animation: glow 1s ease-in-out infinite;
+        }
+
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 5px #10b981; }
+            50% { box-shadow: 0 0 20px #10b981; }
+        }
+
+        .status-error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .message-area {
+            position: relative;
+            height: 400px;
+            margin-top: 30px;
+        }
+
+        .message {
+            position: absolute;
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            max-width: 400px;
+            font-size: 0.9em;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.5s;
+        }
+
+        .message.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .message-request {
+            background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+            border-left: 4px solid #0284c7;
+        }
+
+        .message-response {
+            background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+            border-left: 4px solid #16a34a;
+        }
+
+        .message-error {
+            background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+            border-left: 4px solid #dc2626;
+        }
+
+        .message-label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .message-content {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            line-height: 1.6;
+        }
+
+        .arrow {
+            position: absolute;
+            height: 3px;
+            transform-origin: left center;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .arrow.show {
+            opacity: 1;
+        }
+
+        .arrow::after {
+            content: '';
+            position: absolute;
+            right: -10px;
+            top: -5px;
+            width: 0;
+            height: 0;
+            border-left: 10px solid;
+            border-top: 6px solid transparent;
+            border-bottom: 6px solid transparent;
+        }
+
+        .arrow-request {
+            background: #3b82f6;
+        }
+
+        .arrow-request::after {
+            border-left-color: #3b82f6;
+        }
+
+        .arrow-response {
+            background: #10b981;
+        }
+
+        .arrow-response::after {
+            border-left-color: #10b981;
+        }
+
+        .arrow-error {
+            background: #ef4444;
+        }
+
+        .arrow-error::after {
+            border-left-color: #ef4444;
+        }
+
+        .data-packet {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 0.8em;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+        }
+
+        .packet-request {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        }
+
+        .packet-response {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+
+        .packet-error {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+
+        .database-display {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border: 2px solid #0284c7;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 30px;
+            min-height: 200px;
+        }
+
+        .db-title {
+            font-weight: bold;
+            font-size: 1.2em;
+            color: #0c4a6e;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .db-table {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            line-height: 1.8;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .db-row {
+            padding: 8px;
+            border-bottom: 1px solid #e5e7eb;
+            transition: all 0.3s;
+        }
+
+        .db-row:last-child {
+            border-bottom: none;
+        }
+
+        .db-row.highlight {
+            background: #fef3c7;
+            transform: scale(1.02);
+        }
+
+        .db-row.new {
+            background: #d1fae5;
+            animation: slideIn 0.5s ease-out;
+        }
+
+        .db-row.revoked {
+            background: #fee2e2;
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .timeline {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .timeline-item {
+            padding: 10px;
+            border-left: 3px solid #667eea;
+            margin-left: 10px;
+            margin-bottom: 10px;
+            opacity: 0;
+            transform: translateX(-10px);
+            transition: all 0.3s;
+        }
+
+        .timeline-item.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .timeline-time {
+            font-size: 0.75em;
+            color: #6b7280;
+            margin-bottom: 3px;
+        }
+
+        .timeline-text {
+            font-size: 0.9em;
+            color: #374151;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: bold;
+            margin: 0 5px;
+        }
+
+        .badge-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-info {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .scenario-title {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            font-size: 1.3em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        @media (max-width: 768px) {
+            .actor-container {
+                flex-direction: column;
+                gap: 30px;
+            }
+            
+            .controls {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔐 JWT Refresh Token Flow - Dynamic Animation</h1>
+        <p>Watch the real-time interaction between Client, Server, and Database</p>
+    </div>
+
+    <div class="controls">
+        <button class="btn btn-primary" onclick="runScenario('login')">1️⃣ Login Flow</button>
+        <button class="btn btn-success" onclick="runScenario('use')">2️⃣ Use Access Token</button>
+        <button class="btn btn-warning" onclick="runScenario('expired')">3️⃣ Token Expired</button>
+        <button class="btn btn-info" onclick="runScenario('refresh')">4️⃣ Refresh Token (Rotation)</button>
+        <button class="btn btn-danger" onclick="runScenario('attack')">5️⃣ Security: Stolen Token</button>
+        <button class="btn btn-primary" onclick="runScenario('logout')">6️⃣ Logout</button>
+        <button class="btn" onclick="runAllScenarios()" style="background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);">▶️ Play All</button>
+        <button class="btn" onclick="resetAll()" style="background: #6c757d; color: white;">🔄 Reset</button>
+    </div>
+
+    <div class="canvas-container">
+        <div id="scenarioTitle" class="scenario-title">Select a scenario to begin</div>
+
+        <div class="progress-bar">
+            <div id="progressBar" class="progress-fill"></div>
+        </div>
+
+        <div class="actor-container">
+            <div class="actor">
+                <div id="clientIcon" class="actor-icon client-icon">👤</div>
+                <div class="actor-label">Client</div>
+                <div id="clientStatus" class="actor-status status-idle">Idle</div>
+                <div id="clientTokens" style="margin-top: 10px; font-size: 0.8em; color: #6b7280;"></div>
+            </div>
+
+            <div class="actor">
+                <div id="serverIcon" class="actor-icon server-icon">🖥️</div>
+                <div class="actor-label">Server</div>
+                <div id="serverStatus" class="actor-status status-idle">Idle</div>
+            </div>
+
+            <div class="actor">
+                <div id="databaseIcon" class="actor-icon database-icon">🗄️</div>
+                <div class="actor-label">Database</div>
+                <div id="databaseStatus" class="actor-status status-idle">Idle</div>
+            </div>
+        </div>
+
+        <div class="message-area" id="messageArea">
+            <svg id="arrowSvg" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;">
+            </svg>
+        </div>
+
+        <div class="database-display">
+            <div class="db-title">
+                <span>🗄️</span>
+                <span>RefreshTokens Table</span>
+            </div>
+            <div class="db-table" id="dbTable">
+                <div style="color: #9ca3af; font-style: italic;">No tokens yet...</div>
+            </div>
+        </div>
+
+        <div class="timeline" id="timeline">
+            <div style="color: #9ca3af; font-style: italic; text-align: center;">Event timeline will appear here...</div>
+        </div>
+    </div>
+
+    <script>
+        let currentScenario = null;
+        let isPlaying = false;
+        let timelineEvents = [];
+        let dbTokens = [];
+
+        function addTimelineEvent(text) {
+            const time = new Date().toLocaleTimeString();
+            timelineEvents.push({ time, text });
+            
+            const timeline = document.getElementById('timeline');
+            timeline.innerHTML = '';
+            
+            timelineEvents.slice(-10).forEach((event, index) => {
+                const item = document.createElement('div');
+                item.className = 'timeline-item';
+                item.innerHTML = `
+                    <div class="timeline-time">${event.time}</div>
+                    <div class="timeline-text">${event.text}</div>
+                `;
+                timeline.appendChild(item);
+                
+                setTimeout(() => {
+                    item.classList.add('show');
+                }, index * 50);
+            });
+        }
+
+        function updateProgress(percent) {
+            document.getElementById('progressBar').style.width = percent + '%';
+        }
+
+        function setActorStatus(actor, status, text) {
+            const statusEl = document.getElementById(actor + 'Status');
+            statusEl.className = 'actor-status status-' + status;
+            statusEl.textContent = text;
+            
+            const icon = document.getElementById(actor + 'Icon');
+            icon.classList.add('pulse');
+            setTimeout(() => icon.classList.remove('pulse'), 800);
+        }
+
+        function updateClientTokens(accessToken, refreshToken) {
+            const el = document.getElementById('clientTokens');
+            if (accessToken && refreshToken) {
+                el.innerHTML = `
+                    <div style="margin-bottom: 5px;">
+                        <span class="badge badge-info">Access: ${accessToken}</span>
+                    </div>
+                    <div>
+                        <span class="badge badge-warning">Refresh: ${refreshToken}</span>
+                    </div>
+                `;
+            } else {
+                el.innerHTML = '';
+            }
+        }
+
+        async function drawArrow(fromActor, toActor, type, duration = 1000) {
+            const actors = {
+                'client': document.getElementById('clientIcon'),
+                'server': document.getElementById('serverIcon'),
+                'database': document.getElementById('databaseIcon')
+            };
+
+            const from = actors[fromActor].getBoundingClientRect();
+            const to = actors[toActor].getBoundingClientRect();
+            const container = document.getElementById('messageArea').getBoundingClientRect();
+
+            const svg = document.getElementById('arrowSvg');
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            
+            const x1 = from.left + from.width / 2 - container.left;
+            const y1 = from.top + from.height - container.top;
+            const x2 = to.left + to.width / 2 - container.left;
+            const y2 = to.top + to.height - container.top;
+
+            line.setAttribute('x1', x1);
+            line.setAttribute('y1', y1);
+            line.setAttribute('x2', x1);
+            line.setAttribute('y2', y1);
+            line.setAttribute('stroke', type === 'error' ? '#ef4444' : type === 'response' ? '#10b981' : '#3b82f6');
+            line.setAttribute('stroke-width', '3');
+            line.setAttribute('opacity', '0');
+
+            // Arrow head
+            const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+            marker.setAttribute('id', 'arrowhead-' + Date.now());
+            marker.setAttribute('markerWidth', '10');
+            marker.setAttribute('markerHeight', '10');
+            marker.setAttribute('refX', '9');
+            marker.setAttribute('refY', '3');
+            marker.setAttribute('orient', 'auto');
+            
+            const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            polygon.setAttribute('points', '0 0, 10 3, 0 6');
+            polygon.setAttribute('fill', type === 'error' ? '#ef4444' : type === 'response' ? '#10b981' : '#3b82f6');
+            marker.appendChild(polygon);
+            
+            svg.appendChild(marker);
+            line.setAttribute('marker-end', `url(#${marker.id})`);
+            
+            svg.appendChild(line);
+
+            // Animate
+            await new Promise(resolve => {
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += 2;
+                    if (progress <= 100) {
+                        const currentX = x1 + (x2 - x1) * (progress / 100);
+                        const currentY = y1 + (y2 - y1) * (progress / 100);
+                        line.setAttribute('x2', currentX);
+                        line.setAttribute('y2', currentY);
+                        line.setAttribute('opacity', '0.8');
+                    } else {
+                        clearInterval(interval);
+                        setTimeout(() => {
+                            svg.removeChild(line);
+                            svg.removeChild(marker);
+                            resolve();
+                        }, 500);
+                    }
+                }, duration / 50);
+            });
+        }
+
+        async function showMessage(position, type, label, content) {
+            const messageArea = document.getElementById('messageArea');
+            const message = document.createElement('div');
+            message.className = `message message-${type}`;
+            message.style.left = position.left + 'px';
+            message.style.top = position.top + 'px';
+            message.innerHTML = `
+                <div class="message-label">${label}</div>
+                <div class="message-content">${content}</div>
+            `;
+            
+            messageArea.appendChild(message);
+            
+            setTimeout(() => message.classList.add('show'), 50);
+            
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            message.classList.remove('show');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            messageArea.removeChild(message);
+        }
+
+        function updateDatabase(tokens) {
+            dbTokens = tokens;
+            const dbTable = document.getElementById('dbTable');
+            
+            if (tokens.length === 0) {
+                dbTable.innerHTML = '<div style="color: #9ca3af; font-style: italic;">No tokens yet...</div>';
+                return;
+            }
+
+            dbTable.innerHTML = tokens.map((token, index) => `
+                <div class="db-row ${token.isNew ? 'new' : ''} ${token.isRevoked ? 'revoked' : ''}">
+                    <strong>Token ${index + 1}:</strong> ${token.token}<br>
+                    <span style="color: #6b7280;">
+                        UserId: ${token.userId} | 
+                        Expires: ${token.expiry} | 
+                        Status: ${token.isRevoked ? '❌ Revoked' : '✅ Active'}
+                    </span>
+                </div>
+            `).join('');
+        }
+
+        async function wait(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // SCENARIO 1: LOGIN
+        async function runLoginScenario() {
+            document.getElementById('scenarioTitle').textContent = 'PHASE 1: Login Flow';
+            updateProgress(0);
+            
+            addTimelineEvent('🔵 User initiates login');
+            setActorStatus('client', 'active', 'Sending credentials...');
+            updateProgress(10);
+            
+            await wait(500);
+            await drawArrow('client', 'server', 'request');
+            await showMessage({ left: 100, top: 50 }, 'request', 'LOGIN REQUEST', 'POST /api/auth/login<br>{ username: "admin", password: "..." }');
+            
+            addTimelineEvent('🔵 Server receives login request');
+            setActorStatus('server', 'active', 'Validating credentials...');
+            updateProgress(30);
+            
+            await wait(800);
+            await drawArrow('server', 'database', 'request');
+            
+            addTimelineEvent('🔵 Querying database for user');
+            setActorStatus('database', 'active', 'Finding user...');
+            updateProgress(50);
+            
+            await wait(800);
+            await drawArrow('database', 'server', 'response');
+            
+            addTimelineEvent('✅ User found and password verified');
+            setActorStatus('server', 'active', 'Generating tokens...');
+            updateProgress(70);
+            
+            await wait(800);
+            
+            const accessToken = 'eyJhbGc...ABC';
+            const refreshToken = 'xyz789...';
+            
+            updateDatabase([{
+                token: refreshToken,
+                userId: 1,
+                expiry: '7 days',
+                isRevoked: false,
+                isNew: true
+            }]);
+            
+            addTimelineEvent('✅ Tokens generated and saved');
+            setActorStatus('database', 'active', 'Token saved');
+            updateProgress(85);
+            
+            await wait(500);
+            await drawArrow('server', 'client', 'response');
+            await showMessage({ left: 500, top: 50 }, 'response', 'LOGIN SUCCESS', `Access Token: ${accessToken}<br>Refresh Token: ${refreshToken}<br>Expires: 15 minutes`);
+            
+            updateClientTokens(accessToken, refreshToken);
+            addTimelineEvent('✅ Login successful! Tokens received');
+            setActorStatus('client', 'active', 'Logged in ✓');
+            setActorStatus('server', 'idle', 'Idle');
+            setActorStatus('database', 'idle', 'Idle');
+            updateProgress(100);
+        }
+
+        // SCENARIO 2: USE ACCESS TOKEN
+        async function runUseTokenScenario() {
+            document.getElementById('scenarioTitle').textContent = 'PHASE 2: Using Access Token';
+            updateProgress(0);
+            
+            addTimelineEvent('🔵 Client making API request');
+            setActorStatus('client', 'active', 'Calling API...');
+            updateProgress(20);
+            
+            await wait(500);
+            await drawArrow('client', 'server', 'request');
+            await showMessage({ left: 100, top: 50 }, 'request', 'API REQUEST', 'GET /api/auth/me<br>Authorization: Bearer eyJhbGc...');
+            
+            addTimelineEvent('🔵 Server validating JWT');
+            setActorStatus('server', 'active', 'Validating JWT...');
+            updateProgress(50);
+            
+            await wait(1000);
+            
+            addTimelineEvent('✅ JWT valid! Processing request');
+            setActorStatus('server', 'active', 'Processing...');
+            updateProgress(75);
+            
+            await wait(800);
+            await drawArrow('server', 'client', 'response');
+            await showMessage({ left: 500, top: 50 }, 'response', 'SUCCESS', '200 OK<br>{ id: 1, username: "admin", role: "Admin" }');
+            
+            addTimelineEvent('✅ Request successful');
+            setActorStatus('client', 'active', 'Data received ✓');
+            setActorStatus('server', 'idle', 'Idle');
+            updateProgress(100);
+        }
+
+        // SCENARIO 3: TOKEN EXPIRED
+        async function runExpiredTokenScenario() {
+            document.getElementById('scenarioTitle').textContent = 'PHASE 3: Access Token Expired';
+            updateProgress(0);
+            
+            addTimelineEvent('⚠️ Access token has expired (15 min)');
+            setActorStatus('client', 'active', 'Making request...');
+            updateProgress(20);
+            
+            await wait(500);
+            await drawArrow('client', 'server', 'request');
+            await showMessage({ left: 100, top: 50 }, 'request', 'API REQUEST', 'GET /api/auth/me<br>Authorization: Bearer <expired_token>');
+            
+            addTimelineEvent('🔵 Server validating token');
+            setActorStatus('server', 'active', 'Checking token...');
+            updateProgress(50);
+            
+            await wait(1000);
+            
+            addTimelineEvent('❌ Token expired detected!');
+            setActorStatus('server', 'error', 'Token expired!');
+            updateProgress(75);
+            
+            await wait(800);
+            await drawArrow('server', 'client', 'error');
+            await showMessage({ left: 500, top: 50 }, 'error', 'UNAUTHORIZED', '401 Unauthorized<br>{ message: "Token expired" }');
+            
+            addTimelineEvent('⚠️ Client needs to refresh token');
+            setActorStatus('client', 'active', 'Need refresh...');
+            setActorStatus('server', 'idle', 'Idle');
+            updateProgress(100);
+        }
+
+        // SCENARIO 4: REFRESH TOKEN (ROTATION)
+        async function runRefreshScenario() {
+            document.getElementById('scenarioTitle').textContent = 'PHASE 4: Refresh Token Rotation 🔄';
+            updateProgress(0);
+            
+            const oldToken = 'xyz789...';
+            const newToken = 'abc456...';
+            
+            addTimelineEvent('🔵 Client initiating token refresh');
+            setActorStatus('client', 'active', 'Refreshing token...');
+            updateProgress(10);
+            
+            await wait(500);
+            await drawArrow('client', 'server', 'request');
+            await showMessage({ left: 100, top: 50 }, 'request', 'REFRESH REQUEST', `POST /api/auth/refresh<br>{ refreshToken: "${oldToken}" }`);
+            
+            addTimelineEvent('🔵 Server validating refresh token');
+            setActorStatus('server', 'active', 'Validating token...');
+            updateProgress(20);
+            
+            await wait(500);
+            await drawArrow('server', 'database', 'request');
+            
+            addTimelineEvent('🔵 Checking token in database');
+            setActorStatus('database', 'active', 'Finding token...');
+            updateProgress(35);
+            
+            await wait(800);
+            await drawArrow('database', 'server', 'response');
+            
+            addTimelineEvent('✅ Token found and valid');
+            setActorStatus('server', 'active', 'Generating new tokens...');
+            updateProgress(50);
+            
+            await wait(1000);
+            
+            addTimelineEvent('🔄 TOKEN ROTATION: Creating new refresh token');
+            setActorStatus('server', 'active', 'Rotating tokens...');
+            updateProgress(65);
+            
+            await wait(800);
+            await drawArrow('server', 'database', 'request');
+            
+            addTimelineEvent('🔄 Saving new token & revoking old');
+            setActorStatus('database', 'active', 'Updating tokens...');
+            
+            // Update database - mark old as revoked and add new
+            dbTokens[0].isRevoked = true;
+            dbTokens[0].isNew = false;
+            updateDatabase([
+                ...dbTokens,
+                {
+                    token: newToken,
+                    userId: 1,
+                    expiry: '7 days',
+                    isRevoked: false,
+                    isNew: true
+                }
+            ]);
+            
+            updateProgress(80);
+            
+            await wait(800);
+            await drawArrow('database', 'server', 'response');
+            await drawArrow('server', 'client', 'response');
+            
+            addTimelineEvent('✅ New tokens issued! Old token revoked');
+            await showMessage({ left: 500, top: 50 }, 'response', 'REFRESH SUCCESS', `New Access Token: eyJNEW...<br>New Refresh Token: ${newToken}<br><span class="badge badge-danger">Old token REVOKED</span>`);
+            
+            updateClientTokens('eyJNEW...', newToken);
+            setActorStatus('client', 'active', 'Tokens refreshed ✓');
+            setActorStatus('server', 'idle', 'Idle');
+            setActorStatus('database', 'idle', 'Idle');
+            updateProgress(100);
+        }
+
+        // SCENARIO 5: ATTACK - STOLEN TOKEN
+        async function runAttackScenario() {
+            document.getElementById('scenarioTitle').textContent = 'PHASE 5: 🚨 Security - Stolen Token Attack';
+            updateProgress(0);
+            
+            const revokedToken = 'xyz789...';
+            
+            addTimelineEvent('🔴 ATTACKER trying to use revoked token');
+            setActorStatus('client', 'error', 'Attacker! 🔴');
+            updateProgress(10);
+            
+            await wait(500);
+            await drawArrow('client', 'server', 'error');
+            await showMessage({ left: 100, top: 50 }, 'error', 'MALICIOUS REQUEST', `POST /api/auth/refresh<br>{ refreshToken: "${revokedToken}" } ⚠️ REVOKED TOKEN!`);
+            
+            addTimelineEvent('🔵 Server checking token');
+            setActorStatus('server', 'active', 'Validating...');
+            updateProgress(30);
+            
+            await wait(500);
+            await drawArrow('server', 'database', 'request');
+            
+            addTimelineEvent('🔵 Querying database');
+            setActorStatus('database', 'active', 'Checking status...');
+            updateProgress(50);
+            
+            await wait(1000);
+            await drawArrow('database', 'server', 'error');
+            
+            addTimelineEvent('🚨 SECURITY ALERT: Revoked token detected!');
+            setActorStatus('database', 'error', 'Token revoked!');
+            updateProgress(70);
+            
+            await wait(800);
+            
+            addTimelineEvent('🚨 Revoking ALL user tokens for security');
+            setActorStatus('server', 'error', 'Security breach!');
+            
+            // Revoke all tokens
+            dbTokens = dbTokens.map(t => ({ ...t, isRevoked: true, isNew: false }));
+            updateDatabase(dbTokens);
+            
+            updateProgress(85);
+            
+            await wait(800);
+            await drawArrow('server', 'client', 'error');
+            await showMessage({ left: 500, top: 50 }, 'error', 'ACCESS DENIED', '401 Unauthorized<br>🚨 Security breach detected<br>All tokens revoked<br>User must re-login');
+            
+            addTimelineEvent('✅ Attack blocked! User must re-login');
+            setActorStatus('client', 'error', 'Blocked ❌');
+            setActorStatus('server', 'idle', 'Idle');
+            setActorStatus('database', 'idle', 'Idle');
+            updateProgress(100);
+        }
+
+        // SCENARIO 6: LOGOUT
+        async function runLogoutScenario() {
+            document.getElementById('scenarioTitle').textContent = 'PHASE 6: Logout';
+            updateProgress(0);
+            
+            addTimelineEvent('🔵 User initiating logout');
+            setActorStatus('client', 'active', 'Logging out...');
+            updateProgress(20);
+            
+            await wait(500);
+            await drawArrow('client', 'server', 'request');
+            await showMessage({ left: 100, top: 50 }, 'request', 'LOGOUT REQUEST', 'POST /api/auth/logout<br>Authorization: Bearer eyJhbGc...<br>{ refreshToken: "abc456..." }');
+            
+            addTimelineEvent('🔵 Server processing logout');
+            setActorStatus('server', 'active', 'Processing...');
+            updateProgress(40);
+            
+            await wait(500);
+            await drawArrow('server', 'database', 'request');
+            
+            addTimelineEvent('🔵 Revoking refresh token');
+            setActorStatus('database', 'active', 'Revoking token...');
+            updateProgress(60);
+            
+            // Revoke all tokens
+            dbTokens = dbTokens.map(t => ({ ...t, isRevoked: true, isNew: false }));
+            updateDatabase(dbTokens);
+            
+            await wait(800);
+            await drawArrow('database', 'server', 'response');
+            
+            addTimelineEvent('✅ Tokens revoked successfully');
+            setActorStatus('database', 'active', 'Revoked ✓');
+            updateProgress(80);
+            
+            await wait(500);
+            await drawArrow('server', 'client', 'response');
+            await showMessage({ left: 500, top: 50 }, 'response', 'LOGOUT SUCCESS', '200 OK<br>{ message: "Logged out successfully" }');
+            
+            updateClientTokens(null, null);
+            addTimelineEvent('✅ Logout complete. All tokens cleared');
+            setActorStatus('client', 'idle', 'Logged out ✓');
+            setActorStatus('server', 'idle', 'Idle');
+            setActorStatus('database', 'idle', 'Idle');
+            updateProgress(100);
+        }
+
+        async function runScenario(scenario) {
+            if (isPlaying) return;
+            isPlaying = true;
+            
+            const buttons = document.querySelectorAll('.btn');
+            buttons.forEach(btn => btn.disabled = true);
+            
+            switch(scenario) {
+                case 'login':
+                    await runLoginScenario();
+                    break;
+                case 'use':
+                    await runUseTokenScenario();
+                    break;
+                case 'expired':
+                    await runExpiredTokenScenario();
+                    break;
+                case 'refresh':
+                    await runRefreshScenario();
+                    break;
+                case 'attack':
+                    await runAttackScenario();
+                    break;
+                case 'logout':
+                    await runLogoutScenario();
+                    break;
+            }
+            
+            buttons.forEach(btn => btn.disabled = false);
+            isPlaying = false;
+        }
+
+        async function runAllScenarios() {
+            if (isPlaying) return;
+            
+            resetAll();
+            await wait(500);
+            
+            await runScenario('login');
+            await wait(2000);
+            await runScenario('use');
+            await wait(2000);
+            await runScenario('expired');
+            await wait(2000);
+            await runScenario('refresh');
+            await wait(2000);
+            await runScenario('attack');
+            await wait(2000);
+            await runScenario('logout');
+        }
+
+        function resetAll() {
+            document.getElementById('scenarioTitle').textContent = 'Select a scenario to begin';
+            updateProgress(0);
+            timelineEvents = [];
+            dbTokens = [];
+            
+            setActorStatus('client', 'idle', 'Idle');
+            setActorStatus('server', 'idle', 'Idle');
+            setActorStatus('database', 'idle', 'Idle');
+            
+            updateClientTokens(null, null);
+            updateDatabase([]);
+            
+            document.getElementById('timeline').innerHTML = '<div style="color: #9ca3af; font-style: italic; text-align: center;">Event timeline will appear here...</div>';
+            document.getElementById('messageArea').innerHTML = '<svg id="arrowSvg" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;"></svg>';
+        }
+    </script>
+</body>
+</html>
